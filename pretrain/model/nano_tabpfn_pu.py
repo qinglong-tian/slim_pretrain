@@ -57,8 +57,20 @@ class FeatureEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor, train_test_split_index: int) -> torch.Tensor:
         x = x.unsqueeze(-1)
-        mean = torch.mean(x[:, :train_test_split_index], dim=1, keepdim=True)
-        std = torch.std(x[:, :train_test_split_index], dim=1, keepdim=True) + 1e-20
+        train_rows = int(max(0, min(train_test_split_index, x.shape[1])))
+        if train_rows >= 2:
+            train_slice = x[:, :train_rows]
+            mean = torch.mean(train_slice, dim=1, keepdim=True)
+            std = torch.std(train_slice, dim=1, keepdim=True, unbiased=False).clamp_min(1e-20)
+        elif train_rows == 1:
+            train_slice = x[:, :1]
+            mean = torch.mean(train_slice, dim=1, keepdim=True)
+            # With a single labeled row, variance is undefined/degenerate; avoid scaling.
+            std = torch.ones_like(mean)
+        else:
+            # No labeled rows: keep inputs unchanged by normalization.
+            mean = torch.zeros_like(x[:, :1])
+            std = torch.ones_like(x[:, :1])
         x = (x - mean) / std
         x = torch.clip(x, min=-100, max=100)
         return self.linear_layer(x)
