@@ -48,6 +48,14 @@ def _dist_mean(value: float, device: torch.device) -> float:
     return float(t.item())
 
 
+def _dist_any_true(flag: bool, device: torch.device) -> bool:
+    if not _dist_is_initialized():
+        return bool(flag)
+    t = torch.tensor(1 if flag else 0, device=device, dtype=torch.int32)
+    dist.all_reduce(t, op=dist.ReduceOp.MAX)
+    return bool(int(t.item()) > 0)
+
+
 def _unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
     return model.module if isinstance(model, DDP) else model
 
@@ -184,15 +192,31 @@ def _train_step_on_batch(
             continue
 
         logits = model((x, y_train), train_test_split_index=train_size).squeeze(0)
-        losses.append(F.cross_entropy(logits, y_target))
+        task_loss = F.cross_entropy(logits, y_target)
+        if not torch.isfinite(task_loss):
+            return float("nan")
+        losses.append(task_loss)
 
     if len(losses) == 0:
         return 0.0
 
     loss = torch.stack(losses).mean()
+    if not torch.isfinite(loss):
+        return float("nan")
+
     loss.backward()
+    for param in model.parameters():
+        grad = param.grad
+        if grad is not None and not torch.isfinite(grad).all():
+            return float("nan")
+
     if grad_clip_norm > 0:
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
+        total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
+        if isinstance(total_norm, torch.Tensor):
+            if not torch.isfinite(total_norm):
+                return float("nan")
+        elif not np.isfinite(float(total_norm)):
+            return float("nan")
     optimizer.step()
     return float(loss.detach().cpu().item())
 
@@ -396,6 +420,8 @@ def pretrain_nano_tabpfn_pu(
 
     eval_batches = _build_fixed_eval_batches(base_cfg=base_cfg, config=config) if _is_primary_process() else []
     history: List[Dict[str, object]] = []
+    nonfinite_skip_count = 0
+    max_nonfinite_skips = 10
     for step in range(start_step, config.total_steps):
         phase_step = int(step - resolved_phase_start_step) if phase_local_schedule else int(step)
         phase_step = max(0, phase_step)
@@ -439,7 +465,24 @@ def pretrain_nano_tabpfn_pu(
             device=device,
             grad_clip_norm=config.optim.grad_clip_norm,
         )
+        local_nonfinite = not np.isfinite(local_loss)
+        if _dist_any_true(local_nonfinite, device=device):
+            nonfinite_skip_count += 1
+            msg = (
+                f"Skipping step due to non-finite training loss/gradient at "
+                f"global_step={step+1}, phase_step={phase_step+1}, stage={stage_idx}, "
+                f"lr={lr:.6f} (skip_count={nonfinite_skip_count}/{max_nonfinite_skips})."
+            )
+            if _is_primary_process():
+                print(msg)
+            if nonfinite_skip_count > max_nonfinite_skips:
+                raise FloatingPointError(
+                    "Exceeded max_nonfinite_skips; aborting training to avoid silent divergence."
+                )
+            continue
+
         loss = _dist_mean(local_loss, device=device)
+        nonfinite_skip_count = 0
         ema_loss = loss if ema_loss is None else (config.ema_decay * ema_loss + (1.0 - config.ema_decay) * loss)
 
         eval_loss = float("nan")
@@ -450,6 +493,15 @@ def pretrain_nano_tabpfn_pu(
         )
         if should_eval:
             eval_loss = float(np.mean([_eval_loss_on_batch(model=model, batch=b, device=device) for b in eval_batches]))
+        eval_nonfinite = should_eval and (not np.isfinite(eval_loss))
+        if _dist_any_true(eval_nonfinite and _is_primary_process(), device=device):
+            msg = (
+                f"Non-finite eval loss detected at global_step={step+1}, "
+                f"phase_step={phase_step+1}, stage={stage_idx}, lr={lr:.6f}."
+            )
+            if _is_primary_process():
+                print(msg)
+            raise FloatingPointError(msg)
 
         rec = {
             "step": step,
