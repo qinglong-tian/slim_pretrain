@@ -436,6 +436,7 @@ def pretrain_nano_tabpfn_pu(
             base_lr=config.optim.base_lr,
             min_lr=config.optim.min_lr,
             warmup_steps=config.optim.warmup_steps,
+            decay_power=config.optim.decay_power,
         )
         _set_lr(optimizer, lr)
 

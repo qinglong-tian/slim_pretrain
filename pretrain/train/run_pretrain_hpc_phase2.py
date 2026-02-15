@@ -33,9 +33,10 @@ PHASE2_BLOCK_DEFAULTS: Dict[str, Dict[str, object]] = {
         "num_layers_max": 10,
         "hidden_dim_min": 8,
         "hidden_dim_max": 24,
-        "base_lr": 8e-5,
-        "min_lr": 8e-6,
+        "base_lr": 1.6e-4,
+        "min_lr": 1.6e-5,
         "warmup_steps": 6000,
+        "lr_decay_power": 1.5,
         "nonlinearities": ("tanh", "relu", "gelu", "sine", "identity"),
     },
     "B": {
@@ -49,9 +50,10 @@ PHASE2_BLOCK_DEFAULTS: Dict[str, Dict[str, object]] = {
         "num_layers_max": 11,
         "hidden_dim_min": 10,
         "hidden_dim_max": 30,
-        "base_lr": 6e-5,
-        "min_lr": 6e-6,
+        "base_lr": 1.2e-4,
+        "min_lr": 1.2e-5,
         "warmup_steps": 5000,
+        "lr_decay_power": 1.5,
         "nonlinearities": ("tanh", "relu", "gelu", "sine", "identity", "abs", "square"),
     },
     "C": {
@@ -65,9 +67,10 @@ PHASE2_BLOCK_DEFAULTS: Dict[str, Dict[str, object]] = {
         "num_layers_max": 12,
         "hidden_dim_min": 12,
         "hidden_dim_max": 36,
-        "base_lr": 4e-5,
-        "min_lr": 4e-6,
+        "base_lr": 8e-5,
+        "min_lr": 8e-6,
         "warmup_steps": 4000,
+        "lr_decay_power": 1.5,
         "nonlinearities": (
             "tanh",
             "relu",
@@ -195,6 +198,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-lr", type=float, default=None)
     parser.add_argument("--min-lr", type=float, default=None)
     parser.add_argument("--warmup-steps", type=int, default=None)
+    parser.add_argument("--lr-decay-power", type=float, default=None)
     parser.add_argument("--nonlinearities", type=str, default=None)
 
     parser.add_argument("--log-every", type=int, default=200)
@@ -257,6 +261,7 @@ def main() -> None:
     base_lr = float(_resolve_optional(args.base_lr, block_defaults["base_lr"]))
     min_lr = float(_resolve_optional(args.min_lr, block_defaults["min_lr"]))
     warmup_steps = int(_resolve_optional(args.warmup_steps, block_defaults["warmup_steps"]))
+    lr_decay_power = float(_resolve_optional(args.lr_decay_power, block_defaults["lr_decay_power"]))
     nonlinearities = _parse_nonlinearities(
         spec=args.nonlinearities,
         fallback=tuple(block_defaults["nonlinearities"]),  # type: ignore[arg-type]
@@ -304,6 +309,7 @@ def main() -> None:
             base_lr=base_lr,
             min_lr=min_lr,
             warmup_steps=warmup_steps,
+            decay_power=lr_decay_power,
         ),
         data=data_cfg,
     )

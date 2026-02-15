@@ -22,6 +22,7 @@ class OptimConfig:
     min_lr: float = 3e-5
     weight_decay: float = 1e-4
     warmup_steps: int = 8000
+    decay_power: float = 1.0
     beta1: float = 0.9
     beta2: float = 0.95
     grad_clip_norm: float = 1.0

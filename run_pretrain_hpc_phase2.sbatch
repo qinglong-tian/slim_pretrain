@@ -67,9 +67,10 @@ case "$PHASE2_BLOCK" in
     NUM_LAYERS_MAX="${NUM_LAYERS_MAX:-10}"
     HIDDEN_DIM_MIN="${HIDDEN_DIM_MIN:-8}"
     HIDDEN_DIM_MAX="${HIDDEN_DIM_MAX:-24}"
-    BASE_LR="${BASE_LR:-8e-5}"
-    MIN_LR="${MIN_LR:-8e-6}"
+    BASE_LR="${BASE_LR:-1.6e-4}"
+    MIN_LR="${MIN_LR:-1.6e-5}"
     WARMUP_STEPS="${WARMUP_STEPS:-6000}"
+    LR_DECAY_POWER="${LR_DECAY_POWER:-1.5}"
     NONLINEARITIES_DEFAULT="tanh,relu,gelu,sine,identity"
     ;;
   B)
@@ -84,9 +85,10 @@ case "$PHASE2_BLOCK" in
     NUM_LAYERS_MAX="${NUM_LAYERS_MAX:-11}"
     HIDDEN_DIM_MIN="${HIDDEN_DIM_MIN:-10}"
     HIDDEN_DIM_MAX="${HIDDEN_DIM_MAX:-30}"
-    BASE_LR="${BASE_LR:-6e-5}"
-    MIN_LR="${MIN_LR:-6e-6}"
+    BASE_LR="${BASE_LR:-1.2e-4}"
+    MIN_LR="${MIN_LR:-1.2e-5}"
     WARMUP_STEPS="${WARMUP_STEPS:-5000}"
+    LR_DECAY_POWER="${LR_DECAY_POWER:-1.5}"
     NONLINEARITIES_DEFAULT="tanh,relu,gelu,sine,identity,abs,square"
     ;;
   C)
@@ -101,9 +103,10 @@ case "$PHASE2_BLOCK" in
     NUM_LAYERS_MAX="${NUM_LAYERS_MAX:-12}"
     HIDDEN_DIM_MIN="${HIDDEN_DIM_MIN:-12}"
     HIDDEN_DIM_MAX="${HIDDEN_DIM_MAX:-36}"
-    BASE_LR="${BASE_LR:-4e-5}"
-    MIN_LR="${MIN_LR:-4e-6}"
+    BASE_LR="${BASE_LR:-8e-5}"
+    MIN_LR="${MIN_LR:-8e-6}"
     WARMUP_STEPS="${WARMUP_STEPS:-4000}"
+    LR_DECAY_POWER="${LR_DECAY_POWER:-1.5}"
     NONLINEARITIES_DEFAULT="tanh,relu,gelu,sine,identity,abs,square,sign,heaviside,rbf"
     ;;
   *)
@@ -238,6 +241,7 @@ RUN_ARGS=(
   --base-lr "$BASE_LR"
   --min-lr "$MIN_LR"
   --warmup-steps "$WARMUP_STEPS"
+  --lr-decay-power "$LR_DECAY_POWER"
   --log-every "$LOG_EVERY"
   --eval-every "$EVAL_EVERY"
   --eval-batches "$EVAL_BATCHES"

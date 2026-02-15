@@ -22,6 +22,7 @@ def warmup_cosine_lr(
     base_lr: float,
     min_lr: float,
     warmup_steps: int,
+    decay_power: float = 1.0,
 ) -> float:
     """Common schedule for curriculum-style training: warmup then cosine decay."""
     if total_steps <= 0:
@@ -30,6 +31,8 @@ def warmup_cosine_lr(
         raise ValueError("Require 0 <= min_lr <= base_lr.")
     if warmup_steps < 0:
         raise ValueError("warmup_steps must be >= 0.")
+    if decay_power <= 0.0:
+        raise ValueError("decay_power must be > 0.")
 
     s = max(0, min(step, total_steps - 1))
     if warmup_steps > 0 and s < warmup_steps:
@@ -38,5 +41,6 @@ def warmup_cosine_lr(
     decay_den = max(1, total_steps - warmup_steps)
     progress = (s - warmup_steps) / decay_den
     progress = max(0.0, min(1.0, progress))
+    progress = progress**decay_power
     cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
     return float(min_lr + (base_lr - min_lr) * cosine)

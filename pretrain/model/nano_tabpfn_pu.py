@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 import torch
 import torch.nn.functional as F
+from pathlib import Path
+from typing import Optional, Union
 from torch import nn
 from torch.nn.modules.transformer import LayerNorm, Linear, MultiheadAttention
 
@@ -186,23 +188,83 @@ class Decoder(nn.Module):
 
 
 class NanoTabPFNPUClassifier:
-    """scikit-learn-like interface for the PU-adapted model."""
+    """scikit-learn-like interface for the PU-adapted model.
 
-    def __init__(self, model: NanoTabPFNPUModel, device: torch.device):
-        self.model = model.to(device)
-        self.device = device
+    This wrapper matches the pretraining `drop` PU policy:
+    - Train labels are always the observed positive class (class 0).
+    - `fit` therefore only needs train features.
+    """
+
+    def __init__(self, model: NanoTabPFNPUModel, device: Union[torch.device, str] = "cpu"):
+        self.device = torch.device(device)
+        self.model = model.to(self.device)
+        self.model.eval()
         self.num_classes = 2
+        self.X_train: Optional[np.ndarray] = None
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
-        self.X_train = X_train
-        self.y_train = y_train
+    @staticmethod
+    def default_checkpoint_path() -> Path:
+        # Project root /checkpoints/latest.pt
+        return Path(__file__).resolve().parents[2] / "checkpoints" / "latest.pt"
+
+    @classmethod
+    def from_checkpoint(
+        cls,
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        device: Union[torch.device, str] = "cpu",
+    ) -> "NanoTabPFNPUClassifier":
+        if checkpoint_path is None:
+            checkpoint_path = cls.default_checkpoint_path()
+        checkpoint_path = Path(checkpoint_path).expanduser()
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(
+                f"Checkpoint not found: {checkpoint_path}. "
+                f"Expected latest model at {cls.default_checkpoint_path()}."
+            )
+        payload = torch.load(checkpoint_path, map_location="cpu")
+        if not isinstance(payload, dict):
+            raise ValueError(f"Checkpoint must be a dict-like payload: {checkpoint_path}")
+        if "model_state_dict" not in payload:
+            raise ValueError(f"Checkpoint missing 'model_state_dict': {checkpoint_path}")
+
+        model_cfg = payload.get("config", {})
+        model_cfg = model_cfg.get("model", {}) if isinstance(model_cfg, dict) else {}
+        model = NanoTabPFNPUModel(
+            embedding_size=int(model_cfg.get("embedding_size", 128)),
+            num_attention_heads=int(model_cfg.get("num_attention_heads", 8)),
+            mlp_hidden_size=int(model_cfg.get("mlp_hidden_size", 256)),
+            num_layers=int(model_cfg.get("num_layers", 6)),
+            num_outputs=int(model_cfg.get("num_outputs", 2)),
+        )
+        model.load_state_dict(payload["model_state_dict"])
+        return cls(model=model, device=device)
+
+    def fit(self, X_train: np.ndarray):
+        X_train_arr = np.asarray(X_train, dtype=np.float32)
+        if X_train_arr.ndim != 2:
+            raise ValueError(f"Expected X_train to be 2D, got shape {X_train_arr.shape}.")
+        if X_train_arr.shape[0] == 0:
+            raise ValueError("X_train must contain at least one row.")
+        self.X_train = X_train_arr
+        return self
 
     def predict_proba(self, X_test: np.ndarray) -> np.ndarray:
-        x = np.concatenate((self.X_train, X_test))
-        y = self.y_train
+        if self.X_train is None:
+            raise RuntimeError("Classifier is not fitted. Call fit(X_train) before predict_proba.")
+        X_test_arr = np.asarray(X_test, dtype=np.float32)
+        if X_test_arr.ndim != 2:
+            raise ValueError(f"Expected X_test to be 2D, got shape {X_test_arr.shape}.")
+        if X_test_arr.shape[1] != self.X_train.shape[1]:
+            raise ValueError(
+                f"Feature mismatch: X_train has {self.X_train.shape[1]} features, "
+                f"but X_test has {X_test_arr.shape[1]}."
+            )
+
+        x = np.concatenate((self.X_train, X_test_arr), axis=0)
+        y_train = np.zeros((self.X_train.shape[0],), dtype=np.float32)
         with torch.no_grad():
             x_t = torch.from_numpy(x).unsqueeze(0).to(torch.float).to(self.device)
-            y_t = torch.from_numpy(y).unsqueeze(0).to(torch.float).to(self.device)
+            y_t = torch.from_numpy(y_train).unsqueeze(0).to(torch.float).to(self.device)
             out = self.model((x_t, y_t), train_test_split_index=len(self.X_train)).squeeze(0)
             out = out[:, : self.num_classes]
             probabilities = F.softmax(out, dim=1)
