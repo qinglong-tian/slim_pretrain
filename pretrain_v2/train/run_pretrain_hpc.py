@@ -124,7 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--steps-per-stage", type=int, default=2000)
     parser.add_argument("--total-steps", type=int, default=500000)
 
-    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-features-min", type=int, default=8)
     parser.add_argument("--num-features-max", type=int, default=24)
     parser.add_argument("--positive-size-min", type=int, default=300)
@@ -135,8 +135,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-dim-min", type=int, default=12)
     parser.add_argument("--hidden-dim-max", type=int, default=36)
 
-    parser.add_argument("--base-lr", type=float, default=8e-5)
-    parser.add_argument("--min-lr", type=float, default=8e-6)
+    parser.add_argument("--base-lr", type=float, default=4e-5)
+    parser.add_argument("--min-lr", type=float, default=4e-6)
     parser.add_argument("--warmup-steps", type=int, default=4000)
     parser.add_argument("--lr-decay-power", type=float, default=1.5)
     parser.add_argument("--nonlinearities", type=str, default=None)

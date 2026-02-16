@@ -18,8 +18,8 @@ class ModelConfig:
 
 @dataclass(frozen=True)
 class OptimConfig:
-    base_lr: float = 8e-5
-    min_lr: float = 8e-6
+    base_lr: float = 4e-5
+    min_lr: float = 4e-6
     weight_decay: float = 1e-4
     warmup_steps: int = 4000
     decay_power: float = 1.5
@@ -53,7 +53,7 @@ class DataCurriculumConfig:
     )
     batch_spec: VariableBatchSpec = field(
         default_factory=lambda: VariableBatchSpec(
-            batch_size=8,
+            batch_size=4,
             num_features_range=(8, 24),
             positive_size_range=(300, 500),
             pu_row_policy="drop",

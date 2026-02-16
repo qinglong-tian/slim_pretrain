@@ -82,7 +82,7 @@ TOTAL_STAGES="${TOTAL_STAGES:-200}"
 STEPS_PER_STAGE="${STEPS_PER_STAGE:-2500}"
 TOTAL_STEPS="${TOTAL_STEPS:-$((TOTAL_STAGES * STEPS_PER_STAGE))}"
 
-BATCH_SIZE="${BATCH_SIZE:-8}"
+BATCH_SIZE="${BATCH_SIZE:-4}"
 NUM_FEATURES_MIN="${NUM_FEATURES_MIN:-8}"
 NUM_FEATURES_MAX="${NUM_FEATURES_MAX:-24}"
 POSITIVE_SIZE_MIN="${POSITIVE_SIZE_MIN:-300}"
@@ -93,8 +93,9 @@ NUM_LAYERS_MAX="${NUM_LAYERS_MAX:-12}"
 HIDDEN_DIM_MIN="${HIDDEN_DIM_MIN:-12}"
 HIDDEN_DIM_MAX="${HIDDEN_DIM_MAX:-36}"
 
-BASE_LR="${BASE_LR:-8e-5}"
-MIN_LR="${MIN_LR:-8e-6}"
+# Batch size is per GPU/rank. Halve LR defaults when halving per-GPU batch.
+BASE_LR="${BASE_LR:-4e-5}"
+MIN_LR="${MIN_LR:-4e-6}"
 WARMUP_STEPS="${WARMUP_STEPS:-4000}"
 LR_DECAY_POWER="${LR_DECAY_POWER:-1.5}"
 NONLINEARITIES="${NONLINEARITIES:-tanh,relu,gelu,sine,identity,abs,square,sign,heaviside,rbf}"
@@ -161,6 +162,9 @@ fi
 
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:128"
 export PYTHONUNBUFFERED=1
+# Cluster IB verbs warning workaround: force NCCL socket transport.
+export NCCL_IB_DISABLE="${NCCL_IB_DISABLE:-1}"
+export NCCL_ASYNC_ERROR_HANDLING="${NCCL_ASYNC_ERROR_HANDLING:-1}"
 
 module --force purge
 module load StdEnv/2023
