@@ -26,7 +26,10 @@ class PUCurriculumSchedule:
     unlabeled_ratio_start: Tuple[float, float] = (1.0, 1.0)
     unlabeled_ratio_end: Tuple[float, float] = (0.75, 3.0)
     test_class1_ratio_start: Tuple[float, float] = (0.5, 0.5)
-    test_class1_ratio_end: Tuple[float, float] = (0.2, 0.8)
+    test_class1_ratio_end: Tuple[float, float] = (0.1, 0.9)
+    # Stage-wise schedule for the fraction of features converted to categorical.
+    categorical_feature_ratio_start: Tuple[float, float] = (0.0, 0.0)
+    categorical_feature_ratio_end: Tuple[float, float] = (0.0, 1.0)
 
 
 GROUP1_STAGE_FACTORS = {
@@ -35,6 +38,7 @@ GROUP1_STAGE_FACTORS = {
     "hidden_dim",
     "unlabeled_to_positive_ratio",
     "test_class1_ratio",
+    "categorical_feature_ratio_range",
 }
 STAGE_CONTROLLED_FACTORS = GROUP1_STAGE_FACTORS
 
@@ -149,6 +153,23 @@ def sample_curriculum_config(
         end=pu_schedule.test_class1_ratio_end,
         rng=rng,
     )
+    sampled_categorical_ratio_lo = stage_linear_value(
+        stage_idx=stage_idx,
+        total_stages=total_stages,
+        start=float(pu_schedule.categorical_feature_ratio_start[0]),
+        end=float(pu_schedule.categorical_feature_ratio_end[0]),
+    )
+    sampled_categorical_ratio_hi = stage_linear_value(
+        stage_idx=stage_idx,
+        total_stages=total_stages,
+        start=float(pu_schedule.categorical_feature_ratio_start[1]),
+        end=float(pu_schedule.categorical_feature_ratio_end[1]),
+    )
+    if sampled_categorical_ratio_lo > sampled_categorical_ratio_hi:
+        raise ValueError(
+            "Invalid categorical feature ratio stage range: "
+            f"lower {sampled_categorical_ratio_lo} > upper {sampled_categorical_ratio_hi}."
+        )
 
     cfg_dict = sample_stationary_hyperparameters(
         base_cfg=base_cfg,
@@ -161,6 +182,10 @@ def sample_curriculum_config(
     cfg_dict["hidden_dim"] = sampled_hidden_dim
     cfg_dict["unlabeled_to_positive_ratio"] = sampled_unlabeled_ratio
     cfg_dict["test_class1_ratio"] = sampled_test_class1_ratio
+    cfg_dict["categorical_feature_ratio_range"] = (
+        float(sampled_categorical_ratio_lo),
+        float(sampled_categorical_ratio_hi),
+    )
 
     return SimplifiedPriorConfig(**cfg_dict)
 

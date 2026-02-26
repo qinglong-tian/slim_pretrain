@@ -91,7 +91,6 @@ def _read_checkpoint_steps(checkpoint_path: str) -> Tuple[Optional[int], Optiona
 def _infer_phase_start_step(
     phase_start_step_arg: Optional[int],
     resume_from: Optional[str],
-    init_from: Optional[str],
 ) -> int:
     if phase_start_step_arg is not None:
         if phase_start_step_arg < 0:
@@ -105,12 +104,14 @@ def _infer_phase_start_step(
         if resume_step is not None:
             return int(resume_step)
 
-    if init_from is not None:
-        init_step, _ = _read_checkpoint_steps(init_from)
-        if init_step is not None:
-            return int(init_step)
-
     return 0
+
+
+def _default_legacy_init_checkpoint() -> Optional[str]:
+    candidate = Path(__file__).resolve().parents[1] / "saved_models" / "legacy_model.pt"
+    if candidate.exists():
+        return str(candidate)
+    return None
 
 
 def parse_args() -> argparse.Namespace:
@@ -147,8 +148,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--unlabeled-ratio-end-hi", type=float, default=3.0)
     parser.add_argument("--test-outlier-start-lo", type=float, default=0.5)
     parser.add_argument("--test-outlier-start-hi", type=float, default=0.5)
-    parser.add_argument("--test-outlier-end-lo", type=float, default=0.2)
-    parser.add_argument("--test-outlier-end-hi", type=float, default=0.8)
+    parser.add_argument("--test-outlier-end-lo", type=float, default=0.1)
+    parser.add_argument("--test-outlier-end-hi", type=float, default=0.9)
 
     parser.add_argument("--log-every", type=int, default=200)
     parser.add_argument("--eval-every", type=int, default=200)
@@ -174,6 +175,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    init_from = args.init_from
+    if init_from is None:
+        init_from = _default_legacy_init_checkpoint()
+        if init_from is not None and _is_primary():
+            print(f"Using default legacy init checkpoint: {init_from}")
+
     distributed = _init_distributed(args.dist_backend)
     device = _resolve_device(args.device, distributed=distributed)
 
@@ -181,7 +188,6 @@ def main() -> None:
     phase_start_step = _infer_phase_start_step(
         phase_start_step_arg=args.phase_start_step,
         resume_from=args.resume_from,
-        init_from=args.init_from,
     )
 
     effective_total_stages = int(args.total_stages)
@@ -263,7 +269,7 @@ def main() -> None:
         checkpoint_dir=checkpoint_dir,
         checkpoint_every=args.save_every,
         keep_last_checkpoints=args.keep_last_checkpoints,
-        init_from=args.init_from,
+        init_from=init_from,
         resume_from=args.resume_from,
         auto_resume=not args.no_auto_resume,
         phase_local_schedule=args.phase_local_schedule,

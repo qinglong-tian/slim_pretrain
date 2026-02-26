@@ -60,6 +60,38 @@ def _unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
     return model.module if isinstance(model, DDP) else model
 
 
+def _load_matching_model_weights(
+    model: torch.nn.Module,
+    checkpoint_state_dict: Dict[str, torch.Tensor],
+    checkpoint_path: Path,
+) -> None:
+    """Load only matching-shape parameters from a checkpoint."""
+    model_ref = _unwrap_model(model)
+    model_state = model_ref.state_dict()
+
+    matched: Dict[str, torch.Tensor] = {}
+    skipped_shape = 0
+    skipped_missing = 0
+    for key, value in checkpoint_state_dict.items():
+        if key not in model_state:
+            skipped_missing += 1
+            continue
+        if model_state[key].shape != value.shape:
+            skipped_shape += 1
+            continue
+        matched[key] = value
+
+    load_result = model_ref.load_state_dict(matched, strict=False)
+
+    if _is_primary_process():
+        print(
+            "Loaded matching model weights from "
+            f"{checkpoint_path}: matched={len(matched)}, "
+            f"missing_in_current={skipped_missing}, shape_mismatch={skipped_shape}, "
+            f"new_params={len(load_result.missing_keys)}."
+        )
+
+
 def _resolve_resume_checkpoint(
     checkpoint_dir: Optional[str],
     resume_from: Optional[str],
@@ -94,7 +126,11 @@ def _load_training_state(
     if "model_state_dict" not in payload or "optimizer_state_dict" not in payload or "step" not in payload:
         raise ValueError(f"Invalid checkpoint format: {checkpoint_path}")
 
-    _unwrap_model(model).load_state_dict(payload["model_state_dict"])
+    _load_matching_model_weights(
+        model=model,
+        checkpoint_state_dict=payload["model_state_dict"],
+        checkpoint_path=checkpoint_path,
+    )
     optimizer.load_state_dict(payload["optimizer_state_dict"])
 
     step = int(payload["step"])
@@ -114,7 +150,11 @@ def _load_model_state_only(
     if "model_state_dict" not in payload:
         raise ValueError(f"Invalid checkpoint format (missing model_state_dict): {checkpoint_path}")
 
-    _unwrap_model(model).load_state_dict(payload["model_state_dict"])
+    _load_matching_model_weights(
+        model=model,
+        checkpoint_state_dict=payload["model_state_dict"],
+        checkpoint_path=checkpoint_path,
+    )
     if "step" not in payload:
         return None
     return int(payload["step"]) + 1
@@ -185,13 +225,24 @@ def _train_step_on_batch(
 
         x = batch["X"][idx, :num_rows, :num_features].unsqueeze(0).to(device=device, dtype=torch.float32)
         y = batch["y"][idx, :num_rows].to(device=device, dtype=torch.long)
+        feature_is_categorical = (
+            batch["feature_is_categorical"][idx, :num_features].unsqueeze(0).to(device=device, dtype=torch.bool)
+        )
+        feature_cardinalities = (
+            batch["feature_cardinalities"][idx, :num_features].unsqueeze(0).to(device=device, dtype=torch.long)
+        )
 
         y_train = y[:train_size].to(torch.float32).unsqueeze(0)
         y_target = y[train_size:]
         if y_target.numel() == 0:
             continue
 
-        logits = model((x, y_train), train_test_split_index=train_size).squeeze(0)
+        logits = model(
+            (x, y_train),
+            train_test_split_index=train_size,
+            feature_is_categorical=feature_is_categorical,
+            feature_cardinalities=feature_cardinalities,
+        ).squeeze(0)
         task_loss = F.cross_entropy(logits, y_target)
         if not torch.isfinite(task_loss):
             return float("nan")
@@ -239,13 +290,24 @@ def _eval_loss_on_batch(
 
             x = batch["X"][idx, :num_rows, :num_features].unsqueeze(0).to(device=device, dtype=torch.float32)
             y = batch["y"][idx, :num_rows].to(device=device, dtype=torch.long)
+            feature_is_categorical = (
+                batch["feature_is_categorical"][idx, :num_features].unsqueeze(0).to(device=device, dtype=torch.bool)
+            )
+            feature_cardinalities = (
+                batch["feature_cardinalities"][idx, :num_features].unsqueeze(0).to(device=device, dtype=torch.long)
+            )
 
             y_train = y[:train_size].to(torch.float32).unsqueeze(0)
             y_target = y[train_size:]
             if y_target.numel() == 0:
                 continue
 
-            logits = model((x, y_train), train_test_split_index=train_size).squeeze(0)
+            logits = model(
+                (x, y_train),
+                train_test_split_index=train_size,
+                feature_is_categorical=feature_is_categorical,
+                feature_cardinalities=feature_cardinalities,
+            ).squeeze(0)
             losses.append(F.cross_entropy(logits, y_target))
 
     if len(losses) == 0:
@@ -304,7 +366,7 @@ def pretrain_nano_tabpfn_pu(
     - total_stages x steps_per_stage
     - stage-varying is_causal probability with P(false)=1-s/(2K)
     - full-range sampling for num_layers/hidden_dim from stage 1
-    - stage-widening PU composition controls
+    - stage-widening PU composition controls and categorical conversion ratio
 
     Training curriculum:
     - warmup + cosine learning-rate schedule
@@ -326,6 +388,7 @@ def pretrain_nano_tabpfn_pu(
         mlp_hidden_size=config.model.mlp_hidden_size,
         num_layers=config.model.num_layers,
         num_outputs=config.model.num_outputs,
+        max_categorical_classes=config.model.max_categorical_classes,
     ).to(device)
     if _dist_is_initialized():
         if device.type == "cuda":
@@ -384,17 +447,13 @@ def pretrain_nano_tabpfn_pu(
             checkpoint_path=init_path,
             device=device,
         )
-        if init_step is not None:
-            start_step = init_step
-            if resolved_phase_start_step is None:
-                resolved_phase_start_step = init_step
         if _is_primary_process():
             if init_step is None:
                 print(f"Initialized model weights from checkpoint {init_path_str}; optimizer state reset.")
             else:
                 print(
                     f"Initialized model weights from checkpoint {init_path_str} "
-                    f"at step {init_step}; optimizer state reset."
+                    f"(checkpoint step={init_step}); optimizer state reset; training starts from step 0."
                 )
 
     if resolved_phase_start_step is None:
@@ -521,6 +580,8 @@ def pretrain_nano_tabpfn_pu(
             "cfg_unlabeled_to_positive_ratio": float(batch["cfg_unlabeled_to_positive_ratio"].mean().item()),
             "cfg_test_class1_ratio": float(batch["cfg_test_class1_ratio"].mean().item()),
             "cfg_class1_ratio": float(batch["cfg_class1_ratio"].mean().item()),
+            "cfg_categorical_feature_ratio_lo": float(batch["cfg_categorical_feature_ratio_lo"].mean().item()),
+            "cfg_categorical_feature_ratio_hi": float(batch["cfg_categorical_feature_ratio_hi"].mean().item()),
             "requested_unlabeled_to_positive_ratio": float(
                 batch["requested_unlabeled_to_positive_ratio"].mean().item()
             ),
@@ -530,6 +591,7 @@ def pretrain_nano_tabpfn_pu(
             "realized_test_class1_ratio": float(batch["realized_test_class1_ratio"].mean().item()),
             "realized_unlabeled_class1_ratio": float(batch["realized_unlabeled_class1_ratio"].mean().item()),
             "raw_class1_ratio": float(batch["raw_class1_ratio"].mean().item()),
+            "realized_categorical_feature_ratio": float(batch["realized_categorical_feature_ratio"].mean().item()),
             "positive_train_size": float(batch["positive_train_sizes"].float().mean().item()),
             "test_size": float(batch["test_sizes"].float().mean().item()),
             "batch_pu_rate": float(batch["is_pu"].float().mean().item()),
@@ -545,7 +607,8 @@ def pretrain_nano_tabpfn_pu(
                 f"loss={loss:.4f} loss_ema={float(ema_loss):.4f} eval_loss={eval_str} "
                 f"pu_rate={rec['batch_pu_rate']:.2f} "
                 f"u/p={rec['realized_unlabeled_to_positive_ratio']:.2f} "
-                f"test_outlier={rec['realized_test_class1_ratio']:.2f}"
+                f"test_outlier={rec['realized_test_class1_ratio']:.2f} "
+                f"cat_ratio={rec['realized_categorical_feature_ratio']:.2f}"
             )
             print(msg)
         if (

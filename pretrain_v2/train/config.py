@@ -14,6 +14,7 @@ class ModelConfig:
     mlp_hidden_size: int = 256
     num_layers: int = 6
     num_outputs: int = 2
+    max_categorical_classes: int = 64
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,8 @@ def default_base_prior_config() -> SimplifiedPriorConfig:
         y_is_effect=True,
         in_clique=False,
         sort_features=True,
+        categorical_feature_ratio_range=(0.0, 1.0),
+        categorical_cardinality_range=(2, 10),
         nonlinearities=(
             "tanh",
             "relu",

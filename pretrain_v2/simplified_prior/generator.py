@@ -98,6 +98,74 @@ def _assign_labels_by_ratio(score: Tensor, class1_ratio: float) -> Tensor:
     return y
 
 
+def _sample_num_categorical_features(
+    num_features: int,
+    ratio_range: Tuple[float, float],
+    rng: np.random.Generator,
+) -> int:
+    lo_ratio, hi_ratio = ratio_range
+    lo_count = int(np.floor(float(lo_ratio) * float(num_features)))
+    hi_count = int(np.ceil(float(hi_ratio) * float(num_features)))
+    lo_count = int(np.clip(lo_count, 0, num_features))
+    hi_count = int(np.clip(hi_count, lo_count, num_features))
+    if hi_count == 0:
+        return 0
+    return int(rng.integers(lo_count, hi_count + 1))
+
+
+def _randomly_discretize_features(
+    X: Tensor,
+    train_rows: int,
+    cfg: "SimplifiedPriorConfig",
+    rng: np.random.Generator,
+) -> Tuple[Tensor, Tensor, Tensor]:
+    """Randomly convert a subset of features to categorical bins."""
+    num_features = int(X.shape[1])
+    feature_is_categorical = torch.zeros((num_features,), dtype=torch.bool, device=X.device)
+    feature_cardinalities = torch.zeros((num_features,), dtype=torch.long, device=X.device)
+
+    num_categorical = _sample_num_categorical_features(
+        num_features=num_features,
+        ratio_range=cfg.categorical_feature_ratio_range,
+        rng=rng,
+    )
+    if num_categorical <= 0:
+        return X, feature_is_categorical, feature_cardinalities
+
+    sampled = rng.choice(num_features, size=num_categorical, replace=False)
+    train_rows = int(max(1, min(train_rows, int(X.shape[0]))))
+    X_out = X.clone()
+    card_lo, card_hi = cfg.categorical_cardinality_range
+
+    for feature_index in sampled:
+        requested_cardinality = int(rng.integers(card_lo, card_hi + 1))
+        train_slice = X_out[:train_rows, int(feature_index)].contiguous()
+        quantile_grid = torch.linspace(
+            0.0,
+            1.0,
+            requested_cardinality + 1,
+            dtype=X_out.dtype,
+            device=X_out.device,
+        )[1:-1]
+        boundaries = torch.quantile(train_slice, quantile_grid) if quantile_grid.numel() > 0 else train_slice[:0]
+        boundaries = torch.unique(boundaries)
+
+        if boundaries.numel() == 0:
+            discretized = torch.zeros_like(X_out[:, int(feature_index)], dtype=torch.long)
+            actual_cardinality = 2
+        else:
+            feature_values = X_out[:, int(feature_index)].contiguous()
+            discretized = torch.bucketize(feature_values, boundaries=boundaries)
+            actual_cardinality = max(2, int(boundaries.numel()) + 1)
+            discretized = discretized.clamp(min=0, max=actual_cardinality - 1)
+
+        X_out[:, int(feature_index)] = discretized.to(dtype=X_out.dtype)
+        feature_is_categorical[int(feature_index)] = True
+        feature_cardinalities[int(feature_index)] = int(actual_cardinality)
+
+    return X_out, feature_is_categorical, feature_cardinalities
+
+
 @dataclass
 class SimplifiedPriorConfig:
     # Dataset size / split
@@ -127,6 +195,8 @@ class SimplifiedPriorConfig:
     y_is_effect: bool = True
     in_clique: bool = False
     sort_features: bool = True
+    categorical_feature_ratio_range: Tuple[float, float] = (0.0, 0.0)
+    categorical_cardinality_range: Tuple[int, int] = (2, 10)
 
     # Nonlinearity family used by the prior.
     nonlinearities: Sequence[str] = (
@@ -169,6 +239,18 @@ class SimplifiedPriorConfig:
 
         if self.noncausal_feature_source not in {"head", "roots"}:
             raise ValueError("noncausal_feature_source must be one of: 'head', 'roots'.")
+        if len(self.categorical_feature_ratio_range) != 2:
+            raise ValueError("categorical_feature_ratio_range must contain exactly two values.")
+        cat_ratio_lo = float(self.categorical_feature_ratio_range[0])
+        cat_ratio_hi = float(self.categorical_feature_ratio_range[1])
+        if not (0.0 <= cat_ratio_lo <= cat_ratio_hi <= 1.0):
+            raise ValueError("categorical_feature_ratio_range must satisfy 0 <= lo <= hi <= 1.")
+        if len(self.categorical_cardinality_range) != 2:
+            raise ValueError("categorical_cardinality_range must contain exactly two values.")
+        card_lo = int(self.categorical_cardinality_range[0])
+        card_hi = int(self.categorical_cardinality_range[1])
+        if card_lo < 2 or card_lo > card_hi:
+            raise ValueError("categorical_cardinality_range must satisfy 2 <= lo <= hi.")
         if not self.is_causal and self.noncausal_feature_source == "roots":
             if int(self.num_causes) != int(self.num_features):
                 raise ValueError(
@@ -504,6 +586,8 @@ def generate_simplified_prior_data(
     realized_test_class1_ratios = []
     realized_unlabeled_class1_ratios = []
     raw_class1_ratios = []
+    feature_is_categorical = []
+    feature_cardinalities = []
 
     for _ in range(num_datasets):
         prior = SimpleMLPSCMPrior(cfg)
@@ -523,6 +607,12 @@ def generate_simplified_prior_data(
         ) = _apply_structured_pu_hiding(y=y_true, cfg=cfg, rng=rng)
 
         X = X[ordered_idx]
+        X, is_categorical_i, cardinalities_i = _randomly_discretize_features(
+            X=X,
+            train_rows=train_size,
+            cfg=cfg,
+            rng=rng,
+        )
 
         Xs.append(X.detach())
         ys.append(y.detach())
@@ -540,6 +630,8 @@ def generate_simplified_prior_data(
         realized_test_class1_ratios.append(float(meta["realized_test_class1_ratio"]))
         realized_unlabeled_class1_ratios.append(float(meta["realized_unlabeled_class1_ratio"]))
         raw_class1_ratios.append(float(meta["raw_class1_ratio"]))
+        feature_is_categorical.append(is_categorical_i.detach())
+        feature_cardinalities.append(cardinalities_i.detach())
 
     X = torch.stack(Xs, dim=0).cpu()
     y = torch.stack(ys, dim=0).cpu()
@@ -561,6 +653,8 @@ def generate_simplified_prior_data(
         "realized_test_class1_ratio": torch.tensor(realized_test_class1_ratios, dtype=torch.float32),
         "realized_unlabeled_class1_ratio": torch.tensor(realized_unlabeled_class1_ratios, dtype=torch.float32),
         "raw_class1_ratio": torch.tensor(raw_class1_ratios, dtype=torch.float32),
+        "feature_is_categorical": torch.stack(feature_is_categorical, dim=0).cpu(),
+        "feature_cardinalities": torch.stack(feature_cardinalities, dim=0).cpu(),
     }
 
 

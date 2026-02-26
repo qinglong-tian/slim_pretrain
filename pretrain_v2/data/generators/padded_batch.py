@@ -113,6 +113,8 @@ def generate_variable_padded_batch(
     cfg_unlabeled_to_positive_ratio = []
     cfg_test_class1_ratio = []
     cfg_class1_ratio = []
+    cfg_categorical_feature_ratio_lo = []
+    cfg_categorical_feature_ratio_hi = []
 
     requested_upr = []
     realized_upr = []
@@ -121,6 +123,7 @@ def generate_variable_padded_batch(
     realized_test_ratio = []
     realized_unlabeled_ratio = []
     raw_class1_ratio = []
+    realized_categorical_feature_ratio = []
 
     positive_train_sizes = []
     test_sizes = []
@@ -137,6 +140,8 @@ def generate_variable_padded_batch(
         is_pu_i = bool(out_i["is_pu"][0].item())
         removed_class_i = int(out_i["removed_class"][0].item())
         removed_class_original_i = int(out_i["removed_class_original"][0].item())
+        feature_is_categorical_i = out_i["feature_is_categorical"][0]
+        feature_cardinalities_i = out_i["feature_cardinalities"][0]
 
         original_ti = ti
         removed_rows_i = 0
@@ -150,7 +155,19 @@ def generate_variable_padded_batch(
         li = li[keep_rows]
         ti = int(original_ti - removed_rows_i)
 
-        datasets.append((Xi, yi, li, ti, is_pu_i, removed_class_i, removed_class_original_i))
+        datasets.append(
+            (
+                Xi,
+                yi,
+                li,
+                ti,
+                is_pu_i,
+                removed_class_i,
+                removed_class_original_i,
+                feature_is_categorical_i,
+                feature_cardinalities_i,
+            )
+        )
         seq_lens.append(int(Xi.shape[0]))
         num_features.append(int(Xi.shape[1]))
         train_sizes.append(ti)
@@ -163,6 +180,8 @@ def generate_variable_padded_batch(
         cfg_unlabeled_to_positive_ratio.append(float(cfg_i.unlabeled_to_positive_ratio))
         cfg_test_class1_ratio.append(float(cfg_i.test_class1_ratio))
         cfg_class1_ratio.append(float(cfg_i.class1_ratio))
+        cfg_categorical_feature_ratio_lo.append(float(cfg_i.categorical_feature_ratio_range[0]))
+        cfg_categorical_feature_ratio_hi.append(float(cfg_i.categorical_feature_ratio_range[1]))
 
         p_i = int(out_i["positive_train_sizes"][0].item())
         s_i = int(out_i["test_sizes"][0].item())
@@ -173,6 +192,7 @@ def generate_variable_padded_batch(
         realized_test_ratio.append(float(out_i["realized_test_class1_ratio"][0].item()))
         realized_unlabeled_ratio.append(float(out_i["realized_unlabeled_class1_ratio"][0].item()))
         raw_class1_ratio.append(float(out_i["raw_class1_ratio"][0].item()))
+        realized_categorical_feature_ratio.append(float(feature_is_categorical_i.float().mean().item()))
 
         positive_train_sizes.append(int(out_i["positive_train_sizes"][0].item()))
         test_sizes.append(int(out_i["test_sizes"][0].item()))
@@ -193,8 +213,20 @@ def generate_variable_padded_batch(
     is_pu = torch.zeros((batch_size,), dtype=torch.bool)
     removed_class = torch.full((batch_size,), -1, dtype=torch.long)
     removed_class_original = torch.full((batch_size,), -1, dtype=torch.long)
+    feature_is_categorical = torch.zeros((batch_size, max_features), dtype=torch.bool)
+    feature_cardinalities = torch.zeros((batch_size, max_features), dtype=torch.long)
 
-    for idx, (Xi, yi, li, ti, is_pu_i, removed_class_i, removed_class_original_i) in enumerate(datasets):
+    for idx, (
+        Xi,
+        yi,
+        li,
+        ti,
+        is_pu_i,
+        removed_class_i,
+        removed_class_original_i,
+        feature_is_categorical_i,
+        feature_cardinalities_i,
+    ) in enumerate(datasets):
         rows, feats = Xi.shape
         X_pad[idx, :rows, :feats] = Xi
         y_pad[idx, :rows] = yi.long()
@@ -208,6 +240,8 @@ def generate_variable_padded_batch(
         is_pu[idx] = is_pu_i
         removed_class[idx] = removed_class_i
         removed_class_original[idx] = removed_class_original_i
+        feature_is_categorical[idx, :feats] = feature_is_categorical_i.bool()
+        feature_cardinalities[idx, :feats] = feature_cardinalities_i.long()
 
     return {
         "X": X_pad,
@@ -227,12 +261,16 @@ def generate_variable_padded_batch(
         "is_pu": is_pu,
         "removed_class": removed_class,
         "removed_class_original": removed_class_original,
+        "feature_is_categorical": feature_is_categorical,
+        "feature_cardinalities": feature_cardinalities,
         "cfg_is_causal": torch.tensor(cfg_is_causal, dtype=torch.bool),
         "cfg_num_layers": torch.tensor(cfg_num_layers, dtype=torch.long),
         "cfg_hidden_dim": torch.tensor(cfg_hidden_dim, dtype=torch.long),
         "cfg_unlabeled_to_positive_ratio": torch.tensor(cfg_unlabeled_to_positive_ratio, dtype=torch.float32),
         "cfg_test_class1_ratio": torch.tensor(cfg_test_class1_ratio, dtype=torch.float32),
         "cfg_class1_ratio": torch.tensor(cfg_class1_ratio, dtype=torch.float32),
+        "cfg_categorical_feature_ratio_lo": torch.tensor(cfg_categorical_feature_ratio_lo, dtype=torch.float32),
+        "cfg_categorical_feature_ratio_hi": torch.tensor(cfg_categorical_feature_ratio_hi, dtype=torch.float32),
         "requested_unlabeled_to_positive_ratio": torch.tensor(requested_upr, dtype=torch.float32),
         "realized_unlabeled_to_positive_ratio": torch.tensor(realized_upr, dtype=torch.float32),
         "requested_test_class1_ratio": torch.tensor(requested_test_ratio, dtype=torch.float32),
@@ -240,6 +278,7 @@ def generate_variable_padded_batch(
         "realized_test_class1_ratio": torch.tensor(realized_test_ratio, dtype=torch.float32),
         "realized_unlabeled_class1_ratio": torch.tensor(realized_unlabeled_ratio, dtype=torch.float32),
         "raw_class1_ratio": torch.tensor(raw_class1_ratio, dtype=torch.float32),
+        "realized_categorical_feature_ratio": torch.tensor(realized_categorical_feature_ratio, dtype=torch.float32),
         "positive_train_sizes": torch.tensor(positive_train_sizes, dtype=torch.long),
         "test_sizes": torch.tensor(test_sizes, dtype=torch.long),
     }

@@ -16,9 +16,13 @@ class NanoTabPFNPUModel(nn.Module):
         mlp_hidden_size: int,
         num_layers: int,
         num_outputs: int = 2,
+        max_categorical_classes: int = 64,
     ):
         super().__init__()
-        self.feature_encoder = FeatureEncoder(embedding_size)
+        self.feature_encoder = FeatureEncoder(
+            embedding_size=embedding_size,
+            max_categorical_classes=max_categorical_classes,
+        )
         self.target_encoder = TargetEncoderPU(embedding_size)
         self.transformer_blocks = nn.ModuleList(
             [
@@ -32,12 +36,23 @@ class NanoTabPFNPUModel(nn.Module):
         )
         self.decoder = Decoder(embedding_size, mlp_hidden_size, num_outputs)
 
-    def forward(self, src: tuple[torch.Tensor, torch.Tensor], train_test_split_index: int) -> torch.Tensor:
+    def forward(
+        self,
+        src: tuple[torch.Tensor, torch.Tensor],
+        train_test_split_index: int,
+        feature_is_categorical: torch.Tensor | None = None,
+        feature_cardinalities: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         x_src, y_src = src
         if len(y_src.shape) < len(x_src.shape):
             y_src = y_src.unsqueeze(-1)
 
-        x_src = self.feature_encoder(x_src, train_test_split_index)
+        x_src = self.feature_encoder(
+            x=x_src,
+            train_test_split_index=train_test_split_index,
+            feature_is_categorical=feature_is_categorical,
+            feature_cardinalities=feature_cardinalities,
+        )
         num_rows = x_src.shape[1]
         y_src = self.target_encoder(y_src, num_rows)
         src_table = torch.cat([x_src, y_src], dim=2)
@@ -50,11 +65,17 @@ class NanoTabPFNPUModel(nn.Module):
 
 
 class FeatureEncoder(nn.Module):
-    def __init__(self, embedding_size: int):
+    def __init__(self, embedding_size: int, max_categorical_classes: int = 64):
         super().__init__()
+        if max_categorical_classes < 2:
+            raise ValueError("max_categorical_classes must be >= 2.")
         self.linear_layer = nn.Linear(1, embedding_size)
+        self.categorical_embedding = nn.Embedding(max_categorical_classes + 1, embedding_size)
+        self.continuous_type_embedding = nn.Parameter(torch.zeros(1, 1, 1, embedding_size))
+        self.categorical_type_embedding = nn.Parameter(torch.zeros(1, 1, 1, embedding_size))
+        nn.init.normal_(self.categorical_embedding.weight, std=0.02)
 
-    def forward(self, x: torch.Tensor, train_test_split_index: int) -> torch.Tensor:
+    def _continuous_branch(self, x: torch.Tensor, train_test_split_index: int) -> torch.Tensor:
         x = x.unsqueeze(-1)
         train_rows = int(max(0, min(train_test_split_index, x.shape[1])))
         if train_rows >= 2:
@@ -71,6 +92,57 @@ class FeatureEncoder(nn.Module):
         x = (x - mean) / std
         x = torch.clip(x, min=-100, max=100)
         return self.linear_layer(x)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        train_test_split_index: int,
+        feature_is_categorical: torch.Tensor | None = None,
+        feature_cardinalities: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        continuous_embedded = self._continuous_branch(x=x, train_test_split_index=train_test_split_index)
+        if feature_is_categorical is None and feature_cardinalities is None:
+            return continuous_embedded
+        if feature_is_categorical is None or feature_cardinalities is None:
+            raise ValueError("Provide both feature_is_categorical and feature_cardinalities, or neither.")
+
+        batch_size, _, num_features = x.shape
+        if feature_is_categorical.dim() == 1:
+            feature_is_categorical = feature_is_categorical.unsqueeze(0)
+        if feature_cardinalities.dim() == 1:
+            feature_cardinalities = feature_cardinalities.unsqueeze(0)
+        if feature_is_categorical.shape[0] == 1 and batch_size > 1:
+            feature_is_categorical = feature_is_categorical.expand(batch_size, -1)
+        if feature_cardinalities.shape[0] == 1 and batch_size > 1:
+            feature_cardinalities = feature_cardinalities.expand(batch_size, -1)
+        if feature_is_categorical.shape != (batch_size, num_features):
+            raise ValueError(
+                "feature_is_categorical must have shape (batch_size, num_features), "
+                f"got {tuple(feature_is_categorical.shape)}."
+            )
+        if feature_cardinalities.shape != (batch_size, num_features):
+            raise ValueError(
+                "feature_cardinalities must have shape (batch_size, num_features), "
+                f"got {tuple(feature_cardinalities.shape)}."
+            )
+
+        feature_is_categorical = feature_is_categorical.to(device=x.device, dtype=torch.bool)
+        feature_cardinalities = feature_cardinalities.to(device=x.device, dtype=torch.long).clamp_min(1)
+
+        raw_category_ids = torch.round(x).to(dtype=torch.long)
+        max_supported_category_id = self.categorical_embedding.num_embeddings - 1
+        invalid_category = (
+            (raw_category_ids < 0)
+            | (raw_category_ids >= feature_cardinalities.unsqueeze(1))
+            | (raw_category_ids >= max_supported_category_id)
+        )
+        category_ids = torch.where(invalid_category, torch.zeros_like(raw_category_ids), raw_category_ids + 1)
+        categorical_embedded = self.categorical_embedding(category_ids)
+
+        feature_mask = feature_is_categorical.unsqueeze(1).unsqueeze(-1)
+        continuous_embedded = continuous_embedded + self.continuous_type_embedding
+        categorical_embedded = categorical_embedded + self.categorical_type_embedding
+        return torch.where(feature_mask, categorical_embedded, continuous_embedded)
 
 
 class TargetEncoderPU(nn.Module):
@@ -177,4 +249,3 @@ class Decoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.linear2(F.gelu(self.linear1(x)))
-
