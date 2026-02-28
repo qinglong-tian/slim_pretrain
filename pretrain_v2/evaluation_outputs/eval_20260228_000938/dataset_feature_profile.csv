@@ -1,0 +1,8 @@
+dataset,source,rows,features,continuous_features,categorical_features,max_categorical_cardinality
+uci_wdbc_continuous,uci:wdbc,569,30,30,0,1
+uci_banknote_continuous,uci:banknote-authentication,1372,4,4,0,1
+uci_adult_mixed,uci:adult,32561,14,5,9,42
+uci_credit_approval_mixed,uci:credit-approval,690,15,6,9,15
+uci_mushroom_categorical,uci:mushroom,8124,22,0,22,12
+uci_rice_cammeo_osmancik_continuous,uci:rice-cammeo-and-osmancik,3810,7,7,0,1
+uci_secondary_mushroom_mixed,uci:secondary-mushroom-dataset,61069,20,20,0,1

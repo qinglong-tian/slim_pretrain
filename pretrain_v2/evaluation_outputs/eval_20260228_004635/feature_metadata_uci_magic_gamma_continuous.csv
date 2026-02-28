@@ -1,0 +1,11 @@
+feature,feature_type,raw_unique_values,cardinality
+fLength,continuous,18643,1
+fWidth,continuous,18200,1
+fSize,continuous,7228,1
+fConc,continuous,6410,1
+fConc1,continuous,4421,1
+fAsym,continuous,18704,1
+fM3Long,continuous,18693,1
+fM3Trans,continuous,18390,1
+fAlpha,continuous,17981,1
+fDist,continuous,18437,1

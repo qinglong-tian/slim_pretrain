@@ -1,0 +1,7 @@
+feature,feature_type,raw_unique_values,cardinality
+buying,categorical,4,4
+maint,categorical,4,4
+doors,categorical,4,4
+persons,categorical,3,3
+lug_boot,categorical,3,3
+safety,categorical,3,3

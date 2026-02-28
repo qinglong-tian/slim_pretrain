@@ -1,0 +1,9 @@
+dataset,source,replicates,true_positive_only_sample_size,true_unlabeled_to_labeled_positive_ratio,true_outlier_rate
+uci_adult_mixed,uci:adult,10,300.0,1.5,0.8
+uci_banknote_authentication_continuous,uci:banknote-authentication,10,300.0,1.5,0.788860759493671
+uci_car_evaluation_categorical,uci:car-evaluation,10,217.0,1.4907407407407407,0.6133757961783439
+uci_magic_gamma_continuous,uci:magic-gamma-telescope,10,300.0,1.5,0.8
+uci_mushroom_categorical,uci:mushroom,10,300.0,1.5,0.8
+uci_rice_cammeo_osmancik_continuous,uci:rice-cammeo-and-osmancik,10,300.0,1.5,0.8
+uci_spambase_continuous,uci:spambase,10,300.0,1.5,0.8
+uci_wdbc_continuous,uci:wdbc,10,256.0,1.4970588235294118,0.6392098161578682

@@ -1,0 +1,6 @@
+feature,feature_type,raw_unique_values,cardinality
+cap-shape,categorical,7,7
+does-bruise-or-bleed,categorical,2,2
+has-ring,categorical,2,2
+habitat,categorical,8,8
+season,categorical,4,4

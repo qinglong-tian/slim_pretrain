@@ -1,0 +1,5 @@
+dataset,source,rows,features,continuous_features,categorical_features,max_categorical_cardinality
+uci_wdbc_continuous,uci:wdbc,569,30,30,0,1
+uci_adult_mixed,uci:adult,30162,14,6,8,41
+uci_spambase_continuous,uci:spambase,4601,57,57,0,1
+uci_mushroom_categorical,uci:mushroom,8124,21,0,21,12

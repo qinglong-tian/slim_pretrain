@@ -1,0 +1,17 @@
+{
+  "checkpoint_path": "/Users/qltian/Library/CloudStorage/GoogleDrive-qltian2021@gmail.com/Other computers/My Laptop/Documents/Research/ai/slim_pretrain/pretrain_v2/pretrained_model/latest.pt",
+  "legacy_checkpoint_path": "/Users/qltian/Library/CloudStorage/GoogleDrive-qltian2021@gmail.com/Other computers/My Laptop/Documents/Research/ai/slim_pretrain/pretrain_v2/saved_models/legacy_model.pt",
+  "legacy_model_commit": "bfa65b8",
+  "device": "mps",
+  "allow_uci_download": true,
+  "n_replicates": 10,
+  "max_attempts_per_dataset": 200,
+  "max_positive_size": 800,
+  "unlabeled_labeled_positive_ratio": [
+    2,
+    1
+  ],
+  "outlier_rate": 0.15,
+  "max_categorical_classes": 64,
+  "global_seed": 42
+}

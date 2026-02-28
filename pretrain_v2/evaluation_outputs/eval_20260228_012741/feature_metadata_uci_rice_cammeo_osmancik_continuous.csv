@@ -1,0 +1,8 @@
+feature,feature_type,raw_unique_values,cardinality
+Area,continuous,2828,1
+Perimeter,continuous,3738,1
+Major_Axis_Length,continuous,3808,1
+Minor_Axis_Length,continuous,3804,1
+Eccentricity,continuous,3803,1
+Convex_Area,continuous,2857,1
+Extent,continuous,3804,1

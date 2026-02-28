@@ -1,0 +1,8 @@
+dataset,source,rows,features,continuous_features,categorical_features,max_categorical_cardinality
+uci_wdbc_continuous,uci:wdbc,569,30,30,0,1
+uci_adult_mixed,uci:adult,30162,14,6,8,41
+uci_spambase_continuous,uci:spambase,4601,57,57,0,1
+uci_mushroom_categorical,uci:mushroom,8124,21,0,21,12
+uci_secondary_mushroom_categorical,uci:secondary-mushroom-dataset,61069,11,0,11,64
+uci_magic_gamma_continuous,uci:magic-gamma-telescope,19020,10,10,0,1
+uci_car_evaluation_categorical,uci:car-evaluation,1728,6,0,6,4

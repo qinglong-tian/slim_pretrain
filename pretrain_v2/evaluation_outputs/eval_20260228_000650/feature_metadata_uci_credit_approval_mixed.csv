@@ -1,0 +1,16 @@
+feature,feature_type,raw_unique_values,cardinality
+A1,categorical,2,3
+A2,continuous,349,1
+A3,continuous,215,1
+A4,categorical,3,4
+A5,categorical,3,4
+A6,categorical,14,15
+A7,categorical,9,10
+A8,continuous,132,1
+A9,categorical,2,2
+A10,categorical,2,2
+A11,continuous,23,1
+A12,categorical,2,2
+A13,categorical,3,3
+A14,continuous,170,1
+A15,continuous,240,1

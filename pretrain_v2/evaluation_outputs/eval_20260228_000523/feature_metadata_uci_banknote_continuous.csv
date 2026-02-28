@@ -1,0 +1,5 @@
+feature,feature_type,raw_unique_values,cardinality
+variance,continuous,1338,1
+skewness,continuous,1256,1
+curtosis,continuous,1270,1
+entropy,continuous,1156,1

@@ -1,0 +1,15 @@
+feature,feature_type,raw_unique_values,cardinality
+age,continuous,73,1
+workclass,categorical,8,9
+fnlwgt,continuous,21648,1
+education,categorical,16,16
+education_num,categorical,16,16
+marital_status,categorical,7,7
+occupation,categorical,14,15
+relationship,categorical,6,6
+race,categorical,5,5
+sex,categorical,2,2
+capital_gain,continuous,119,1
+capital_loss,continuous,92,1
+hours_per_week,continuous,94,1
+native_country,categorical,41,42

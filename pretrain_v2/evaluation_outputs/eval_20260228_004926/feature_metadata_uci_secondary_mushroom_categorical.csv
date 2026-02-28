@@ -1,0 +1,12 @@
+feature,feature_type,raw_unique_values,cardinality
+cap-diameter,categorical,2571,64
+cap-shape,categorical,7,7
+cap-color,categorical,12,12
+does-bruise-or-bleed,categorical,2,2
+gill-color,categorical,12,12
+stem-height,categorical,2226,64
+stem-width,categorical,4630,64
+stem-color,categorical,13,13
+has-ring,categorical,2,2
+habitat,categorical,8,8
+season,categorical,4,4

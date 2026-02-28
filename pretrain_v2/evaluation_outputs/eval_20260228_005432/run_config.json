@@ -1,0 +1,15 @@
+{
+  "checkpoint_path": "/Users/qltian/Library/CloudStorage/GoogleDrive-qltian2021@gmail.com/Other computers/My Laptop/Documents/Research/ai/slim_pretrain/pretrain_v2/pretrained_model/latest.pt",
+  "device": "cpu",
+  "allow_uci_download": true,
+  "n_replicates": 10,
+  "max_attempts_per_dataset": 200,
+  "max_positive_size": 500,
+  "unlabeled_labeled_positive_ratio": [
+    3,
+    4
+  ],
+  "outlier_rate": 0.3,
+  "max_categorical_classes": 64,
+  "global_seed": 42
+}
