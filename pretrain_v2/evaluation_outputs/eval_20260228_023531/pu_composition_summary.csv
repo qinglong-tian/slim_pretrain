@@ -1,0 +1,12 @@
+dataset,source,replicates,true_positive_only_sample_size,true_unlabeled_to_labeled_positive_ratio,true_outlier_rate
+uci_abalone_binary_rings_cutoff,uci:abalone,10,900.0,2.0,0.13043478260869565
+uci_adult_mixed,uci:adult,10,900.0,2.0,0.13043478260869565
+uci_banknote_authentication_continuous,uci:banknote-authentication,10,701.2,2.001970443349754,0.13021894391757405
+uci_car_evaluation_categorical,uci:car-evaluation,10,440.4,1.9866666666666668,0.1286445012787724
+uci_default_credit_card_clients_continuous,uci:default-of-credit-card-clients,10,900.0,2.0,0.13043478260869565
+uci_letter_recognition_C_vs_U,uci:letter-recognition,10,759.1,2.0028571428571427,0.1296076522887424
+uci_magic_gamma_continuous,uci:magic-gamma-telescope,10,900.0,2.0,0.13043478260869565
+uci_mushroom_categorical,uci:mushroom,10,900.0,2.0,0.13043478260869565
+uci_rice_cammeo_osmancik_continuous,uci:rice-cammeo-and-osmancik,10,900.0,2.0,0.13043478260869565
+uci_spambase_continuous,uci:spambase,10,900.0,2.0,0.13043478260869565
+uci_wdbc_continuous,uci:wdbc,10,313.5,1.995774647887324,0.1308596918085969

@@ -1,0 +1,9 @@
+feature,feature_type,raw_unique_values,cardinality
+Sex,continuous,3,1
+Length,continuous,134,1
+Diameter,continuous,111,1
+Height,continuous,51,1
+Whole_weight,continuous,2429,1
+Shucked_weight,continuous,1515,1
+Viscera_weight,continuous,880,1
+Shell_weight,continuous,926,1

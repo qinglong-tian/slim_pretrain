@@ -1,0 +1,12 @@
+dataset,source,rows,features,continuous_features,categorical_features,max_categorical_cardinality
+uci_wdbc_continuous,uci:wdbc,569,30,30,0,1
+uci_adult_mixed,uci:adult,30162,11,6,5,7
+uci_spambase_continuous,uci:spambase,4601,57,57,0,1
+uci_mushroom_categorical,uci:mushroom,8124,20,0,20,10
+uci_magic_gamma_continuous,uci:magic-gamma-telescope,19020,10,10,0,1
+uci_car_evaluation_categorical,uci:car-evaluation,1728,6,0,6,4
+uci_banknote_authentication_continuous,uci:banknote-authentication,1372,4,4,0,1
+uci_rice_cammeo_osmancik_continuous,uci:rice-cammeo-and-osmancik,3810,7,7,0,1
+uci_default_credit_card_clients_continuous,uci:default-of-credit-card-clients,30000,23,23,0,1
+uci_abalone_binary_rings_cutoff,uci:abalone,4177,8,8,0,1
+uci_letter_recognition_C_vs_U,uci:letter-recognition,1549,16,16,0,1

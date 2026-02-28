@@ -1,0 +1,17 @@
+feature,feature_type,raw_unique_values,cardinality
+x1,continuous,13,1
+x2,continuous,16,1
+x3,continuous,10,1
+x4,continuous,10,1
+x5,continuous,13,1
+x6,continuous,9,1
+x7,continuous,9,1
+x8,continuous,13,1
+x9,continuous,11,1
+x10,continuous,12,1
+x11,continuous,12,1
+x12,continuous,11,1
+x13,continuous,12,1
+x14,continuous,8,1
+x15,continuous,11,1
+x16,continuous,12,1
